@@ -3,6 +3,7 @@ from typing import Any
 
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
+
 from .retry_manager import IRetryManager, RetryConfig, RetryManager
 
 __all__ = ["RabbitMQProducer"]
