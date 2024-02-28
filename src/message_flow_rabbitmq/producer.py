@@ -3,11 +3,15 @@ from typing import Any
 
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
+from .retry_manager import IRetryManager, RetryConfig, RetryManager
 
 __all__ = ["RabbitMQProducer"]
 
 
 class RabbitMQProducer:
+    retry_config = RetryConfig()
+    retry_manager: IRetryManager = RetryManager(retry_config)
+
     def __init__(self, dsn: str, id: str) -> None:
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -18,6 +22,7 @@ class RabbitMQProducer:
         self._channel: BlockingChannel | None = None
 
     @property
+    @retry_manager.reconnect()
     def connection(self) -> pika.BlockingConnection:
         if self._connection is None:
             self._connection = pika.BlockingConnection(pika.URLParameters(self._dsn))
