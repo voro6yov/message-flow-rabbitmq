@@ -42,7 +42,7 @@ class RetryManager:
 
         def recalculate_delay(delay: float) -> float:
             delay *= self._backoff
-            delay += self._jitter if isinstance(self._jitter, float) else uniform(*self._jitter)
+            delay += uniform(*self._jitter) if isinstance(self._jitter, tuple) else self._jitter
 
             if self._max_delay is not None:
                 delay = min(delay, self._max_delay)
