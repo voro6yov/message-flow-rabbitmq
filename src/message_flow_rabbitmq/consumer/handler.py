@@ -1,14 +1,14 @@
 import logging
 import multiprocessing as mp
 from contextlib import contextmanager
-from typing import Any, Callable, Generator
+from typing import Callable, Generator
 
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.exceptions import AMQPConnectionError
 from pika.spec import Basic, BasicProperties
 
 from .amqp_data import AMQPData
-from .dead_letters import IDeadLetters
+from .dead_letters import DeadLetters
 
 __all__ = ["Handler"]
 
@@ -19,8 +19,8 @@ mp.set_start_method("fork")
 class Handler:
     def __init__(
         self,
-        message_handler: Callable,
-        dead_letters: IDeadLetters,
+        message_handler: Callable[[bytes, dict[str, str]], None],
+        dead_letters: DeadLetters,
     ) -> None:
         self._logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class Handler:
             amqp_data.send_nack(self._dead_letters.is_requeue_needed(amqp_data.headers))
 
     @contextmanager
-    def _handle_message(self, body: bytes, headers: dict[str, Any]) -> Generator[mp.Process, None, None]:
+    def _handle_message(self, body: bytes, headers: dict[str, str]) -> Generator[mp.Process, None, None]:
         handler_process = mp.Process(target=self._message_handler, args=(body, headers))
         try:
             handler_process.start()

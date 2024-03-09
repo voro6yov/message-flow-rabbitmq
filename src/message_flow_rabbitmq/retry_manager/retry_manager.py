@@ -11,13 +11,14 @@ from .retry_config import RetryConfig
 
 if TYPE_CHECKING:
     from ..consumer import RabbitMQConsumer
+    from ..producer import RabbitMQProducer
 
 __all__ = ["RetryManager"]
 
-Consumer = TypeVar("Consumer", bound="RabbitMQConsumer")
+Client = TypeVar("Client", "RabbitMQConsumer", "RabbitMQProducer")
 
-ConnectionProperty = Callable[[Consumer], pika.BlockingConnection]
-Callback = Callable[[Consumer], None]
+ConnectionProperty = Callable[[Client], pika.BlockingConnection]
+Callback = Callable[[Client], None]
 
 
 class RetryManager:
