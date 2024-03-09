@@ -1,56 +1,54 @@
 import logging
-from typing import Any
-from uuid import uuid4
+from typing import Callable
 
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.exchange_type import ExchangeType
 
-from .dead_letters import DeadLetters, DeadLettersConfig, IDeadLetters
+from ..retry_manager import RetryConfig
+from ._consumer_construction import ConsumerMeta
+from .dead_letters import DeadLetters, DeadLettersConfig
 from .handler import Handler
-from .retry_manager import IRetryManager, RetryConfig, RetryManager
 from .subscription import Subscription
 
 __all__ = ["RabbitMQConsumer"]
 
 
-class RabbitMQConsumer:
-    retry_config = RetryConfig()
-    retry_manager: IRetryManager = RetryManager(retry_config)
-
+class RabbitMQConsumer(metaclass=ConsumerMeta):
     def __init__(
         self,
         dsn: str,
-        id: str | None = None,
-        dead_letters: IDeadLetters = DeadLetters(DeadLettersConfig()),
+        id: str = "MessageFlowRabbitMQ",
+        *,
+        retry_config: RetryConfig = RetryConfig(),
+        dead_letters_config: DeadLettersConfig = DeadLettersConfig(),
     ) -> None:
         self._logger = logging.getLogger(__name__)
 
-        self._id = id or uuid4().hex
         self._dsn = dsn
-        self._dead_letters = dead_letters
+        self._id = id
+
+        self._retry_config = retry_config
+        self._dead_letters = DeadLetters(dead_letters_config)
 
         self._connection: pika.BlockingConnection | None = None
         self._channel: BlockingChannel | None = None
 
         self._subscriptions: list[Subscription] = []
 
-    @property
-    @retry_manager.reconnect()
-    def connection(self) -> pika.BlockingConnection:
+    def get_connection(self) -> pika.BlockingConnection:
         if self._connection is None:
-            self._connection = pika.BlockingConnection(pika.ConnectionParameters(self._dsn))
+            self._connection = pika.BlockingConnection(pika.URLParameters(self._dsn))
 
         return self._connection
 
-    @property
-    def channel(self) -> BlockingChannel:
+    def get_channel(self) -> BlockingChannel:
         if self._channel is None:
-            self._channel = self.connection.channel()
+            self._channel = self.get_connection().channel()
 
         return self._channel
 
-    def subscribe(self, channels: set[str], handler: Any) -> None:
+    def subscribe(self, channels: set[str], handler: Callable[[bytes, dict[str, str]], None]) -> None:
         self._subscriptions.append(Subscription(channels, handler))
 
     def reset(self) -> None:
@@ -60,33 +58,32 @@ class RabbitMQConsumer:
         if self._connection is not None and self._connection.is_closed:
             self._connection = None
 
-    @retry_manager.restart(reset)
     def start_consuming(self) -> None:
         self._setup_subscriptions()
         self._logger.info("Starting to consume messages.")
-        self.channel.start_consuming()
+        self.get_channel().start_consuming()
 
     def close(self) -> None:
-        self.channel.close()
-        self.connection.close()
+        self.get_channel().close()
+        self.get_connection().close()
 
     def _declare_exchange(self, exchange_name: str) -> None:
-        self.channel.exchange_declare(exchange=exchange_name, exchange_type=ExchangeType.topic, durable=True)
+        self.get_channel().exchange_declare(exchange=exchange_name, exchange_type=ExchangeType.topic, durable=True)
 
     def _declare_queue(self, channel: str) -> None:
-        self.channel.basic_qos(prefetch_count=1)
-        self.channel.queue_declare(
+        self.get_channel().basic_qos(prefetch_count=1)
+        self.get_channel().queue_declare(
             queue=f"{channel}.{self._id}",
             durable=True,
-            arguments=self._dead_letters.make_arguments(self.channel, f"{channel}.{self._id}"),
+            arguments=self._dead_letters.make_arguments(self.get_channel(), f"{channel}.{self._id}"),
         )
 
     def _bind_topic_to_queue(self, channel: str) -> None:
-        self.channel.queue_bind(exchange=channel, queue=f"{channel}.{self._id}", routing_key="#")
+        self.get_channel().queue_bind(exchange=channel, queue=f"{channel}.{self._id}", routing_key="#")
 
-    def _bind_handler_to_queue(self, channel: str, handler: Any) -> None:
+    def _bind_handler_to_queue(self, channel: str, handler: Callable[[bytes, dict[str, str]], None]) -> None:
         wrapped_callback = Handler(handler, self._dead_letters)
-        self.channel.basic_consume(queue=f"{channel}.{self._id}", on_message_callback=wrapped_callback)
+        self.get_channel().basic_consume(queue=f"{channel}.{self._id}", on_message_callback=wrapped_callback)
 
     def _setup_subscriptions(self) -> None:
         for subscription in self._subscriptions:

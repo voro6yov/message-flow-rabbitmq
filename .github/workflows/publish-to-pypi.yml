@@ -97,7 +97,7 @@ jobs:
 
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/<package-name>
+      url: https://test.pypi.org/p/message-flow-rabbitmq
 
     permissions:
       id-token: write

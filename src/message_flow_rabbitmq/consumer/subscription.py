@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Callable
 
 __all__ = ["Subscription"]
 
@@ -7,4 +7,4 @@ __all__ = ["Subscription"]
 @dataclass
 class Subscription:
     channels: set[str]
-    handler: Any
+    handler: Callable[[bytes, dict[str, str]], None]

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.spec import Basic, BasicProperties
@@ -27,7 +26,7 @@ class AMQPData:
         return self.method.delivery_tag
 
     @property
-    def headers(self) -> dict[str, Any]:
+    def headers(self) -> dict[str, str]:
         return self.properties.headers
 
     def send_ack(self) -> None:
