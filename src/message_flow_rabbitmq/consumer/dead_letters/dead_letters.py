@@ -9,6 +9,8 @@ __all__ = ["DeadLetters"]
 
 
 class DeadLetters:
+    ID: str = "RabbitMQMessageID"
+
     def __init__(
         self,
         config: DeadLettersConfig,
@@ -17,7 +19,6 @@ class DeadLetters:
         self._routing_key: str = config.get("routing_key", "dlx-routing-key")
 
         self._max_requeue_counter: int = config.get("max_requeue_counter", 3)
-        self._message_id_header: str = config.get("message_id_header", "ID")
 
         self._counters: dict[str, int] = {}
 
@@ -40,7 +41,7 @@ class DeadLetters:
         return self._dead_letters_exchange_declare(channel, queue_name)
 
     def _get_message_id(self, headers: dict[str, str]) -> str:
-        if (message_id := headers.get(self._message_id_header)) is None:
+        if (message_id := headers.get(self.ID)) is None:
             raise RuntimeError("Message ID is not provided.")
 
         return message_id
