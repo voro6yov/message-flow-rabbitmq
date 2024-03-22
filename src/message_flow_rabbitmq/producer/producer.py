@@ -1,4 +1,5 @@
 import logging
+from uuid import uuid4
 
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
@@ -10,6 +11,8 @@ __all__ = ["RabbitMQProducer"]
 
 
 class RabbitMQProducer(metaclass=ProducerMeta):
+    ID: str = "RabbitMQMessageID"
+
     def __init__(
         self,
         dsn: str,
@@ -43,10 +46,16 @@ class RabbitMQProducer(metaclass=ProducerMeta):
             routing_key="#",
             body=body,
             properties=pika.BasicProperties(
-                headers=headers if headers is not None else {},
+                headers=self._make_message_headers(headers),
             ),
         )
 
     def close(self) -> None:
         self.get_channel().close()
         self.get_connection().close()
+
+    def _make_message_headers(self, raw_headers: dict[str, str] | None) -> dict[str, str]:
+        headers = raw_headers or {}
+        headers.update({"RabbitMQMessageID": uuid4().hex})
+
+        return headers

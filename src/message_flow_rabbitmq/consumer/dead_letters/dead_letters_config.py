@@ -7,4 +7,3 @@ class DeadLettersConfig(TypedDict, total=False):
     exchange_name: str
     routing_key: str
     max_requeue_counter: int
-    message_id_header: str
